@@ -1,5 +1,9 @@
 # Project Notes (IMGS-621) Computer Vision
 
+Commented files
+Model code: PixelwiseColorConstancy/Model/model.py
+Training the Model: PixelwiseColorConstancy/main.py
+Testing the Model: PixelwiseColorConstancy/maintest.py
 
 # Object-based color constancy in a deep neural network
 
