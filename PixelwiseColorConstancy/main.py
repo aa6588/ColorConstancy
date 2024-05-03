@@ -15,10 +15,13 @@ from torch.utils.tensorboard import SummaryWriter
 
 
 def train_model(model, optimizer, scheduler,writer,save_path, num_epochs=25):
-
+# training loop
     log_interval = 1
 
-    for epoch in range(1,num_epochs):
+    for epoch in range(1,num_epochs):   # This parameter determines the number of epochs (complete passes through the entire dataset)
+                                        # for training the model. A higher number of epochs may allow the model to
+                                        # converge to a better solution but also risks overfitting.
+
         print('-' * 10)
         print('Epoch {}/{}'.format(epoch, num_epochs - 1))
 
@@ -45,6 +48,7 @@ def train_model(model, optimizer, scheduler,writer,save_path, num_epochs=25):
             dataLen=len(dataloaders[phase].dataset)
 
             start_time = time.time()
+            # for each batch of data in the phase, the input data and labels are loaded onto the appropriate device.
             for batch_idx, data in enumerate(dataloaders[phase]):
                 indexes,filenames,inputs, labels,gtsh=data
 
@@ -57,11 +61,12 @@ def train_model(model, optimizer, scheduler,writer,save_path, num_epochs=25):
                 # zero the parameter gradients
                 optimizer.zero_grad()
 
-                # forward
-                # track history if only in train
+                # forward propagation
+                # Forward pass is performed through the model to compute loss.
                 with torch.set_grad_enabled(phase == 'train'):
                     with torch.cuda.amp.autocast():
                         outputs = model(inputs)
+                        # Loss is computed based on the predictions and ground truth labels.
 
                         loss,bcaObjects,bcaBG  = calc_loss(outputs, labels,gtsh)
                         metrics['loss'] += loss.data.cpu().numpy() * labels.size(0)
@@ -69,6 +74,8 @@ def train_model(model, optimizer, scheduler,writer,save_path, num_epochs=25):
                         localsMetrics['bcaObjects'] += bcaObjects.data.cpu().numpy() * labels.size(0)
                         localsMetrics['bcaBG'] += bcaBG.data.cpu().numpy() * labels.size(0)
 
+                    # Backpropagation is performed to compute gradients and update model
+                    # parameters using the optimizer.
                     if phase == 'train':
                         scaler.scale(loss).backward()
                         scaler.step(optimizer)
@@ -95,7 +102,7 @@ def train_model(model, optimizer, scheduler,writer,save_path, num_epochs=25):
                 epoch_samples += inputs.size(0)
                 if (batch_idx==1 or batch_idx==(max_len -1) or batch_idx==50  or batch_idx==100 ):
                     util.PlotHCV(save_path+"/",phase+'_'+str(epoch)+'_'+str(batch_idx)+'_'+os.path.basename(filenames[0])[:-4],inputs[0], labels[0], outputs[0])
-
+            # Learning rate scheduler is invoked to adjust the learning rate if applicable.
             if phase == 'train':
                 scheduler.step()
                 writer.add_scalars('Loss', {'MSE Train': metrics['loss'] / epoch_samples}, epoch)
@@ -106,10 +113,11 @@ def train_model(model, optimizer, scheduler,writer,save_path, num_epochs=25):
                 writer.add_scalars('Loss', {'MSE Val': metrics['loss'] / epoch_samples}, epoch)
 
             outputs=[]
+            # Metrics such as loss are logged for monitoring the training progress.
             for k in metrics.keys():
                 outputs.append("{}: {:4f}".format(k, metrics[k] / epoch_samples))
             logging.info("_*_*_*_*_*_*_*_*_*_*_*_*_*_*_*_*_*_*_*_*_*_*_*_*_*_*_    {}: {}".format(phase, ", ".join(outputs)))
-
+        # Once training completes for all epochs, a message indicating the end of training is printed
         time_elapsed = time.time() - since
         print('{:.0f}m {:.0f}s'.format(time_elapsed // 60, time_elapsed % 60))
 
@@ -131,7 +139,9 @@ if __name__ == '__main__':
     logging.getLogger('')
     logging.basicConfig(level = logging.INFO)
 
-    # use same transform for train/val for this example
+    # Transformations such as random crop,
+    # horizontal flip, and tensor conversion are applied
+    # to augment or preprocess the data.
     trans = t.Compose([
         t.RandomCrop(prob=0.5),
         t.RandomHorizontalFlip(prob=0.5),
@@ -141,14 +151,14 @@ if __name__ == '__main__':
     transVal = t.Compose([
         t.ToTensorOneHot(),
     ])
-
+    # create training and validation sets
     train_set = dataset.TrainDataset("data/train/", transform=trans)
     val_set = dataset.ValDataset("data/test/", transform=transVal)
 
     image_datasets = {
         'train': train_set, 'val': val_set
     }
-
+    # DataLoaders are created to load batches of data for training and validation.
     dataloaders = {
         'train': DataLoader(train_set, batch_size=batch_size, shuffle=True, num_workers=8,pin_memory=True),
         'val': DataLoader(val_set, batch_size=batch_size, shuffle=False, num_workers=8,pin_memory=True)
@@ -157,26 +167,34 @@ if __name__ == '__main__':
     dataset_sizes = {
         x: len(image_datasets[x]) for x in image_datasets.keys()
     }
-
+    # uses CUDA or CPU
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     print(device)
-
+    # model is initialized
     model = model.UNetWithResnet50Encoder(num_class).to(device)
 
     modelname='UNetWithResnet50Encoder'
     logging.info('ModelName:  '+modelname)
+    # The learning rate determines the size of the step
+    # that the optimizer takes while updating the model parameters during training.
     logging.info('First Learning Rate:  ' + str(lr))
+    # step size helps in controlling the rate at which the learning rate decreases during training
     logging.info('step_size:  ' + str(step_size))
+    # controls the rate of decay of the learning rate and typically has a value between 0 and 1.
     logging.info('Gamma:  ' + str(gamma))
     logging.info('Number of class:  ' + str(num_class))
 
     # Observe that all parameters are being optimized
+    # Adam optimizer, short for Adaptive Moment Estimation optimizer
+    # Adam is an extension of the stochastic gradient descent (SGD) algorithm
     optimizer_ft = optim.Adam(model.parameters(), lr=lr)
+    # The learning rate scheduler adjusts the learning rate during
+    # training based on the learning rate based on the number of epochs (step_size) and a decay factor (gamma).
     exp_lr_scheduler = lr_scheduler.StepLR(optimizer_ft, step_size=step_size, gamma=gamma)
 
     weights = torch.load('model_500.pth', map_location='cuda:0')
     model.load_state_dict(weights)
-
+    # updates final model
     model = train_model(model, optimizer_ft, exp_lr_scheduler,writer,save_path, num_epochs=501,)
 
 
