@@ -6,7 +6,9 @@ class ConvBlock(nn.Module):
     """
     Helper module that consists of a Conv -> BN -> ReLU
     """
-
+# This class defines a convolutional block, which consists of a convolutional layer followed by
+    # batch normalization and a ReLU activation function.
+    # It's a basic building block used in various parts of the model.
     def __init__(self, in_channels, out_channels, padding=1, kernel_size=3, stride=1, with_nonlinearity=True):
         super().__init__()
         self.conv = nn.Conv2d(in_channels, out_channels, padding=padding, kernel_size=kernel_size, stride=stride)
@@ -25,7 +27,8 @@ class Bridge(nn.Module):
     """
     This is the middle layer of the UNet which just consists of some
     """
-
+# This class represents the bridge layer in the U-Net architecture.
+    # It consists of two convolutional blocks connected sequentially.
     def __init__(self, in_channels, out_channels):
         super().__init__()
         self.bridge = nn.Sequential(
@@ -40,7 +43,10 @@ class UpBlockForUNetWithResNet50(nn.Module):
     """
     Up block that encapsulates one up-sampling step which consists of Upsample -> ConvBlock -> ConvBlock
     """
-
+# This class defines an up-sampling block, which encapsulates one up-sampling step.
+    # It consists of an up-sampling operation (convolution transpose), followed by two convolutional blocks.
+    # This block is responsible for merging feature maps from the down-sampling path (encoder)
+    # with feature maps from the up-sampling path (decoder).
     def __init__(self, in_channels, out_channels, up_conv_in_channels=None, up_conv_out_channels=None,
                  upsampling_method="conv_transpose"):
         super().__init__()
@@ -74,7 +80,12 @@ class UpBlockForUNetWithResNet50(nn.Module):
 
 class UNetWithResnet50Encoder(nn.Module):
     DEPTH = 6
-
+# This class defines the entire U-Net architecture with a ResNet-50 backbone.
+    # It initializes the ResNet-50 backbone and splits it into down-sampling blocks.
+    # It includes a bridge layer and up-sampling blocks.
+    # It handles the forward pass, where it processes the input through the ResNet backbone,
+    # applies the bridge layer, and then performs up-sampling using the defined up-sampling blocks.
+    # The final output is produced after applying a convolutional layer at the end of the decoder.
     def __init__(self, n_classes=3):
         super().__init__()
         resnet = torchvision.models.resnet.resnet50()
@@ -99,6 +110,7 @@ class UNetWithResnet50Encoder(nn.Module):
 
         self.out = nn.Conv2d(64, n_classes, kernel_size=1, stride=1)
 
+    # Optionally, it can return feature maps if specified.
     def forward(self, x, with_output_feature_map=False):
         pre_pools = dict()
         pre_pools[f"layer_0"] = x
